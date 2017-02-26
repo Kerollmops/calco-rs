@@ -2,6 +2,7 @@ extern crate rand;
 extern crate roulette_wheel;
 
 use std::iter::FromIterator;
+use rand::{Rng, thread_rng, ThreadRng};
 use roulette_wheel::RouletteWheel;
 
 pub mod traits;
@@ -36,27 +37,59 @@ pub struct StopConditions {
 }
 
 #[derive(Debug)]
-pub struct Calco<T> {
+pub struct Calco<R: Rng, T> {
+    rng: R,
     population: Vec<T>
 }
 
-impl<T: Clone + Evaluate + Mutate + Reproduce> Iterator for Calco<T> {
-    type Item = ();
+use std::fmt::Debug;
+
+impl<R: Rng + Clone, T: Debug + Clone + Evaluate + Mutate + Reproduce> Iterator for Calco<R, T> {
+    type Item = (f32, T);
 
     fn next(&mut self) -> Option<Self::Item> {
         let rw: RouletteWheel<_> = self.population.iter().cloned()
                                     .map(|ind| (ind.evaluate(), ind))
                                     .collect();
 
+        let new_pop: Vec<_> = rw.into_iter().map(|(_, ind)| ind).collect();
+        let mut rng = self.rng.clone();
+        let iter = new_pop.chunks(2).flat_map(|parents| {
+                        if parents.len() == 2 {
+                            // println!("{:?} + {:?} = ❤️", parents[0], parents[1]);
+                            let children = parents[0].reproduce(&parents[1], &mut rng);
+                            children.into_iter()
+                        }
+                        else { parents.to_vec().into_iter() }
+                    });
         self.population.clear();
-        self.population.extend(rw.into_iter().map(|(_, ind)| ind));
-        Some(())
+        self.population.extend(iter);
+
+        // TODO: really ugly
+        let (fit, best) = self.population.iter()
+                            .fold(None, |acc, ind| {
+                                match acc {
+                                    Some((bfit, best)) => {
+                                        let fit = ind.evaluate();
+                                        if fit > bfit {
+                                            Some((fit, ind))
+                                        } else {
+                                            Some((bfit, best))
+                                        }
+                                    },
+                                    None => Some((ind.evaluate(), ind)),
+                                }
+                            })
+                            .unwrap();
+        println!("pop len: {:?}", self.population.len());
+        Some((fit, best.clone()))
     }
 }
 
-impl<T: Evaluate + Mutate + Reproduce> FromIterator<T> for Calco<T> {
-    fn from_iter<I>(iter: I) -> Calco<T> where I: IntoIterator<Item=T> {
+impl<T: Evaluate + Mutate + Reproduce> FromIterator<T> for Calco<ThreadRng, T> {
+    fn from_iter<I>(iter: I) -> Calco<ThreadRng, T> where I: IntoIterator<Item=T> {
         Calco {
+            rng: thread_rng(),
             population: iter.into_iter().collect()
         }
     }
@@ -69,7 +102,7 @@ mod tests {
     use traits::{Evaluate, Mutate, Reproduce};
 
     const SEED: [usize; 4] = [4, 2, 42, 4242];
-    const global_minimum: (f32, f32) = (0.0, 0.0);
+    const global_minimum: (f32, f32) = (15.0, -15.0);
 
     #[derive(Debug, Copy, Clone)]
     struct SimpleIndividual {
@@ -109,6 +142,7 @@ mod tests {
                         x: (self.x + father.x) / 2.0,
                         y: (self.y + father.y) / 2.0
                     });
+                    children.push(self.clone());
                 },
             }
             children
@@ -117,13 +151,13 @@ mod tests {
 
     #[test]
     fn iterator_simple() {
-        let calco: Calco<_> = StdRng::from_seed(&SEED).gen_iter()
-                                .take(10)
+        let calco: Calco<_, _> = StdRng::from_seed(&SEED).gen_iter()
+                                .take(100)
                                 .map(|(x, y)| SimpleIndividual{ x: x, y: y })
                                 .collect();
 
-        for (gen, pop) in calco.enumerate().take(100) {
-            println!("Gen {:?}", gen);
+        for (gen, best) in calco.enumerate().take(10000) {
+            println!("gen: {:?}, best: {:?}", gen, best);
         }
     }
 }
