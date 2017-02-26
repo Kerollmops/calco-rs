@@ -301,7 +301,7 @@ impl<'a, R: Rng, T: 'a> Iterator for SelectIter<'a, R, T> {
             let index = self.fitnesses_ids.iter().position(|&(_, fit)| {
                             selection -= fit;
                             selection <= 0.0
-                        }).expect("Cannot find selection index");
+                        }).expect("Cannot select next index (null fitnesses?)");
             let (index, fitness) = self.fitnesses_ids.swap_remove(index);
             self.total_fitness -= fitness;
             Some((fitness, &self.roulette_wheel.population[index]))
@@ -364,7 +364,7 @@ impl<R: Rng, T> Iterator for IntoSelectIter<R, T> {
             let index = self.fitnesses.iter().position(|fit| {
                             selection -= *fit;
                             selection <= 0.0
-                        }).expect("Cannot find selection index");
+                        }).expect("Cannot select next index (null fitnesses?)");
             let fitness = self.fitnesses.swap_remove(index);
             let individual = self.population.swap_remove(index);
             self.total_fitness -= fitness;
