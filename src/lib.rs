@@ -79,8 +79,7 @@ impl<R: Rng + Clone, T: Debug + Clone + Evaluate + Mutate + Reproduce> Iterator 
                                     },
                                     None => Some((ind.evaluate(), ind)),
                                 }
-                            })
-                            .unwrap();
+                            }).expect("Can't find best value");
         println!("pop len: {:?}", self.population.len());
         Some((fit, best.clone()))
     }
@@ -142,7 +141,10 @@ mod tests {
                         x: (self.x + father.x) / 2.0,
                         y: (self.y + father.y) / 2.0
                     });
-                    children.push(self.clone());
+                    children.push(SimpleIndividual {
+                        x: self.x + father.x,
+                        y: self.y + father.y
+                    });
                 },
             }
             children
