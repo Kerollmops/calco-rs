@@ -59,7 +59,7 @@ impl<T: Clone> Clone for RouletteWheel<T> {
 
 impl<T> FromIterator<(f32, T)> for RouletteWheel<T> {
     fn from_iter<A>(iter: A) -> Self where A: IntoIterator<Item=(f32, T)> {
-        let (fitnesses, population): (Vec<f32>, _) = iter.into_iter().unzip();
+        let (fitnesses, population): (Vec<f32>, _) = iter.into_iter().filter(|&(fit, _)| fit > 0.0).unzip();
         let total_fitness = fitnesses.iter().sum();
         RouletteWheel {
             total_fitness: total_fitness,
@@ -358,17 +358,23 @@ impl<R: Rng, T> Iterator for IntoSelectIter<R, T> {
     }
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.fitnesses.is_empty() {
-            let sample = self.distribution_range.ind_sample(&mut self.rng);
-            let mut selection = sample * self.total_fitness;
-            let index = self.fitnesses.iter().position(|fit| {
+        if !self.fitnesses.is_empty() && self.total_fitness > 0.0 {
+            // let sample = self.distribution_range.ind_sample(&mut self.rng);
+            // let mut selection = sample * self.total_fitness;
+            // }).expect(format!("Cannot select next index (null fitnesses?); {:?}: {:?}", self.fitnesses, selection).as_str());
+
+            let mut selection = self.rng.gen_range(0.0, self.total_fitness);
+            let maybe_index = self.fitnesses.iter().position(|fit| {
                             selection -= *fit;
                             selection <= 0.0
-                        }).expect("Cannot select next index (null fitnesses?)");
-            let fitness = self.fitnesses.swap_remove(index);
-            let individual = self.population.swap_remove(index);
-            self.total_fitness -= fitness;
-            Some((fitness, individual))
+                        });
+            if let Some(index) = maybe_index {
+                let fitness = self.fitnesses.swap_remove(index);
+                let individual = self.population.swap_remove(index);
+                self.total_fitness -= fitness;
+                Some((fitness, individual))
+            }
+            else { None }
         }
         else { None }
     }

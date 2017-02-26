@@ -48,22 +48,29 @@ impl<R: Rng + Clone, T: Debug + Clone + Evaluate + Mutate + Reproduce> Iterator 
     type Item = (f32, T);
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.population.sort_by(|a, b| b.evaluate().partial_cmp(&a.evaluate()).unwrap());
         let rw: RouletteWheel<_> = self.population.iter().cloned()
                                     .map(|ind| (ind.evaluate(), ind))
                                     .collect();
 
-        let new_pop: Vec<_> = rw.into_iter().map(|(_, ind)| ind).collect();
+        let new_pop: Vec<_> = rw.into_iter().map(|(fit, ind)| ind).collect();
         let mut rng = self.rng.clone();
         let iter = new_pop.chunks(2).flat_map(|parents| {
                         if parents.len() == 2 {
-                            // println!("{:?} + {:?} = ❤️", parents[0], parents[1]);
                             let children = parents[0].reproduce(&parents[1], &mut rng);
                             children.into_iter()
                         }
                         else { parents.to_vec().into_iter() }
                     });
-        self.population.clear();
+
+        self.population.truncate(3); // keep bests
         self.population.extend(iter);
+
+        if self.rng.gen::<f32>() < 0.2 {
+            if let Some(ind) = self.rng.choose_mut(self.population.as_mut_slice()) {
+                ind.mutate(&mut self.rng);
+            }
+        }
 
         // TODO: really ugly
         let (fit, best) = self.population.iter()
@@ -80,7 +87,6 @@ impl<R: Rng + Clone, T: Debug + Clone + Evaluate + Mutate + Reproduce> Iterator 
                                     None => Some((ind.evaluate(), ind)),
                                 }
                             }).expect("Can't find best value");
-        println!("pop len: {:?}", self.population.len());
         Some((fit, best.clone()))
     }
 }
@@ -96,70 +102,7 @@ impl<T: Evaluate + Mutate + Reproduce> FromIterator<T> for Calco<ThreadRng, T> {
 
 #[cfg(test)]
 mod tests {
-    use rand::{Rng, SeedableRng, StdRng};
-    use Calco;
-    use traits::{Evaluate, Mutate, Reproduce};
-
-    const SEED: [usize; 4] = [4, 2, 42, 4242];
-    const global_minimum: (f32, f32) = (15.0, -15.0);
-
-    #[derive(Debug, Copy, Clone)]
-    struct SimpleIndividual {
-        x: f32,
-        y: f32
-    }
-
-    impl Evaluate for SimpleIndividual {
-        fn evaluate(&self) -> f32 {
-            // note: inverse euclidean distance
-            let (gx, gy) = global_minimum;
-            let x = self.x - gx;
-            let y = self.y - gy;
-            1.0 / (x * x + y * y).sqrt()
-        }
-    }
-
-    impl Mutate for SimpleIndividual {
-        fn mutate<R: Rng>(&mut self, rng: &mut R) {
-            match rng.gen() { // ugly but... why not
-                true => self.x = rng.gen(),
-                false => self.y = rng.gen(),
-            }
-        }
-    }
-
-    impl Reproduce for SimpleIndividual {
-        fn reproduce<'a, R: Rng>(&self, father: &Self, rng: &mut R) -> Vec<Self> {
-            let mut children = Vec::with_capacity(2);
-            match rng.gen() { // ugly but... why not
-                true => {
-                    children.push(SimpleIndividual { x: self.x, y: father.y });
-                    children.push(SimpleIndividual { x: father.x, y: self.y });
-                },
-                false => {
-                    children.push(SimpleIndividual {
-                        x: (self.x + father.x) / 2.0,
-                        y: (self.y + father.y) / 2.0
-                    });
-                    children.push(SimpleIndividual {
-                        x: self.x + father.x,
-                        y: self.y + father.y
-                    });
-                },
-            }
-            children
-        }
-    }
-
     #[test]
-    fn iterator_simple() {
-        let calco: Calco<_, _> = StdRng::from_seed(&SEED).gen_iter()
-                                .take(100)
-                                .map(|(x, y)| SimpleIndividual{ x: x, y: y })
-                                .collect();
-
-        for (gen, best) in calco.enumerate().take(10000) {
-            println!("gen: {:?}, best: {:?}", gen, best);
-        }
+    fn it_works() {
     }
 }
