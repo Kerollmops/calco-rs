@@ -8,4 +8,5 @@ license = "MIT"
 repository = "https://github.com/Kerollmops/calco-rs"
 
 [dependencies]
+rand = "0.3"
 roulette-wheel = { path = "roulette-wheel" }
