@@ -1,3 +1,5 @@
+use rand::Rng;
+
 pub trait Reproduce: Sized {
-    fn reproduce<'a, I>(&self, &I) -> Vec<Self> where I: Iterator<Item=&'a Self>, Self: 'a;
+    fn reproduce<'a, R: Rng>(&self, father: &Self, rng: &mut R) -> Vec<Self>;
 }
