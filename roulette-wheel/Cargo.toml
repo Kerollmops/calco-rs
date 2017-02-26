@@ -1,0 +1,14 @@
+[package]
+name = "roulette-wheel"
+version = "0.2.2"
+authors = ["Kero <renault.cle@gmail.com>"]
+documentation = "http://docs.rs/roulette-wheel"
+description = """
+A roulette wheel selection collection, used in genetic algorithm
+for fitness proportionate selection.
+"""
+license = "MIT"
+repository = "https://github.com/Kerollmops/roulette-wheel-rs"
+
+[dependencies]
+rand = "0.3"

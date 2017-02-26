@@ -1,6 +1,11 @@
 [package]
 name = "calco"
 version = "0.1.0"
-authors = ["Kerollmops <renault.cle@gmail.com>"]
+authors = ["Kero <renault.cle@gmail.com>"]
+documentation = "http://docs.rs/calco"
+# description = ""
+license = "MIT"
+repository = "https://github.com/Kerollmops/calco-rs"
 
 [dependencies]
+roulette-wheel = { path = "roulette-wheel" }
