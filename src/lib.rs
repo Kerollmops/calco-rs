@@ -49,8 +49,8 @@ impl<R: Rng + Clone, T: Debug + Clone + Evaluate + Mutate + Reproduce> Iterator 
 
     fn next(&mut self) -> Option<Self::Item> {
         self.population.sort_by(|a, b| b.evaluate().partial_cmp(&a.evaluate()).unwrap());
-        let rw: RouletteWheel<_> = self.population.iter().cloned()
-                                    .map(|ind| (ind.evaluate(), ind))
+        let rw: RouletteWheel<f64, _> = self.population.iter().cloned()
+                                    .map(|ind| (ind.evaluate() as f64, ind))
                                     .collect();
 
         let new_pop: Vec<_> = rw.into_iter().map(|(fit, ind)| ind).collect();
@@ -64,7 +64,7 @@ impl<R: Rng + Clone, T: Debug + Clone + Evaluate + Mutate + Reproduce> Iterator 
                     });
 
         self.population.truncate(3); // keep bests
-        self.population.extend(iter);
+        self.population.extend(iter.take(97));
 
         if self.rng.gen::<f32>() < 0.2 {
             if let Some(ind) = self.rng.choose_mut(self.population.as_mut_slice()) {

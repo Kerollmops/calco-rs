@@ -12,3 +12,4 @@ repository = "https://github.com/Kerollmops/roulette-wheel-rs"
 
 [dependencies]
 rand = "0.3"
+num = "0.1"

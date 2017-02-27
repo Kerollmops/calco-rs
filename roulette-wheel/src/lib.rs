@@ -35,20 +35,23 @@
 //! ```
 
 extern crate rand;
+extern crate num;
 
-use std::iter::{FromIterator, Iterator, IntoIterator};
+use std::iter::{FromIterator, Iterator, IntoIterator, Sum};
 use rand::{Rng, ThreadRng, thread_rng};
 use rand::distributions::{Range, IndependentSample};
+use rand::distributions::range::SampleRange;
+use num::Float;
 
 /// A roulette-wheel container
-pub struct RouletteWheel<T> {
-    total_fitness: f32,
-    fitnesses: Vec<f32>,
+pub struct RouletteWheel<F: Float, T> {
+    total_fitness: F,
+    fitnesses: Vec<F>,
     population: Vec<T>
 }
 
-impl<T: Clone> Clone for RouletteWheel<T> {
-    fn clone(&self) -> RouletteWheel<T> {
+impl<F: Float, T: Clone> Clone for RouletteWheel<F, T> {
+    fn clone(&self) -> RouletteWheel<F, T> {
         RouletteWheel {
             total_fitness: self.total_fitness,
             fitnesses: self.fitnesses.clone(),
@@ -57,11 +60,11 @@ impl<T: Clone> Clone for RouletteWheel<T> {
     }
 }
 
-impl<T> FromIterator<(f32, T)> for RouletteWheel<T> {
-    fn from_iter<A>(iter: A) -> Self where A: IntoIterator<Item=(f32, T)> {
-        let (fitnesses, population): (Vec<f32>, _) = iter.into_iter().unzip();
-        assert!(!fitnesses.iter().any(|fit| *fit == 0.0), "Can't push less than or equal to zero fitness!");
-        let total_fitness = fitnesses.iter().sum();
+impl<F: Float + Sum<F>, T> FromIterator<(F, T)> for RouletteWheel<F, T> {
+    fn from_iter<A>(iter: A) -> Self where A: IntoIterator<Item=(F, T)> {
+        let (fitnesses, population): (Vec<F>, _) = iter.into_iter().unzip();
+        assert!(!fitnesses.iter().any(|fit| *fit == F::zero()), "Can't push less than or equal to zero fitness!");
+        let total_fitness = fitnesses.iter().cloned().sum();
         RouletteWheel {
             total_fitness: total_fitness,
             fitnesses: fitnesses,
@@ -70,7 +73,7 @@ impl<T> FromIterator<(f32, T)> for RouletteWheel<T> {
     }
 }
 
-impl<T> RouletteWheel<T> {
+impl<F: Float, T> RouletteWheel<F, T> {
     /// create a new empty random-wheel.
     /// # Example
     ///
@@ -79,9 +82,9 @@ impl<T> RouletteWheel<T> {
     ///
     /// let rw = RouletteWheel::<u8>::new();
     /// ```
-    pub fn new() -> RouletteWheel<T> {
+    pub fn new() -> RouletteWheel<F, T> {
         RouletteWheel {
-            total_fitness: 0.0,
+            total_fitness: F::zero(),
             fitnesses: Vec::new(),
             population: Vec::new()
         }
@@ -97,9 +100,9 @@ impl<T> RouletteWheel<T> {
     ///
     /// assert_eq!(rw.len(), 0);
     /// ```
-    pub fn with_capacity(cap: usize) -> RouletteWheel<T> {
+    pub fn with_capacity(cap: usize) -> RouletteWheel<F, T> {
         RouletteWheel {
-            total_fitness: 0.0,
+            total_fitness: F::zero(),
             fitnesses: Vec::with_capacity(cap),
             population: Vec::with_capacity(cap)
         }
@@ -193,8 +196,8 @@ impl<T> RouletteWheel<T> {
     ///
     /// assert_eq!(rw.len(), 3);
     /// ```
-    pub fn push(&mut self, fitness: f32, individual: T) {
-        assert!(fitness >= 0.0, "Can't push the less than or equal to zero fitness: {:?}", fitness);
+    pub fn push(&mut self, fitness: F, individual: T) {
+        assert!(fitness >= F::zero(), "Can't push less than or equal to zero fitness");
         assert!((self.total_fitness + fitness).is_finite(), "Fitnesses sum reached a non-finite value!");
         unsafe { self.unchecked_push(fitness, individual) }
     }
@@ -215,8 +218,8 @@ impl<T> RouletteWheel<T> {
     ///
     /// assert_eq!(rw.len(), 3);
     /// ```
-    pub unsafe fn unchecked_push(&mut self, fitness: f32, individual: T) {
-        self.total_fitness += fitness;
+    pub unsafe fn unchecked_push(&mut self, fitness: F, individual: T) {
+        self.total_fitness = self.total_fitness + fitness;
         self.fitnesses.push(fitness);
         self.population.push(individual);
     }
@@ -235,7 +238,7 @@ impl<T> RouletteWheel<T> {
     ///
     /// assert_eq!(rw.total_fitness(), 6.5);
     /// ```
-    pub fn total_fitness(&self) -> f32 {
+    pub fn total_fitness(&self) -> F {
         self.total_fitness
     }
 
@@ -254,8 +257,8 @@ impl<T> RouletteWheel<T> {
     /// assert_eq!(iterator.next(), Some((0.2, &15)));
     /// assert_eq!(iterator.next(), None);
     /// ```
-    pub fn select_iter(&self) -> SelectIter<ThreadRng, T> {
-        SelectIter::<ThreadRng, _>::new(&self)
+    pub fn select_iter(&self) -> SelectIter<ThreadRng, F, T> where F: SampleRange {
+        SelectIter::<ThreadRng, _, _>::new(&self)
     }
 }
 
@@ -264,22 +267,22 @@ impl<T> RouletteWheel<T> {
 /// This struct is created by the [`select_iter`].
 ///
 /// [`iter`]: struct.RouletteWheel.html#method.select_iter
-pub struct SelectIter<'a, R: Rng, T: 'a> {
-    distribution_range: Range<f32>,
+pub struct SelectIter<'a, R: Rng, F: 'a + Float + SampleRange, T: 'a> {
+    distribution_range: Range<F>,
     rng: R,
-    total_fitness: f32,
-    fitnesses_ids: Vec<(usize, f32)>,
-    roulette_wheel: &'a RouletteWheel<T>
+    total_fitness: F,
+    fitnesses_ids: Vec<(usize, F)>,
+    roulette_wheel: &'a RouletteWheel<F, T>
 }
 
-impl<'a, R: Rng, T> SelectIter<'a, R, T> {
-    pub fn new(roulette_wheel: &'a RouletteWheel<T>) -> SelectIter<'a, ThreadRng, T> {
+impl<'a, R: Rng, F: Float + SampleRange, T> SelectIter<'a, R, F, T> {
+    pub fn new(roulette_wheel: &'a RouletteWheel<F, T>) -> SelectIter<'a, ThreadRng, F, T> {
         SelectIter::from_rng(roulette_wheel, thread_rng())
     }
 
-    pub fn from_rng(roulette_wheel: &'a RouletteWheel<T>, rng: R) -> SelectIter<'a, R, T> {
+    pub fn from_rng(roulette_wheel: &'a RouletteWheel<F, T>, rng: R) -> SelectIter<'a, R, F, T> {
         SelectIter {
-            distribution_range: Range::new(0.0, 1.0),
+            distribution_range: Range::new(F::zero(), F::one()),
             rng: rng,
             total_fitness: roulette_wheel.total_fitness,
             fitnesses_ids: roulette_wheel.fitnesses.iter().cloned().enumerate().collect(),
@@ -288,8 +291,8 @@ impl<'a, R: Rng, T> SelectIter<'a, R, T> {
     }
 }
 
-impl<'a, R: Rng, T: 'a> Iterator for SelectIter<'a, R, T> {
-    type Item = (f32, &'a T);
+impl<'a, R: Rng, F: Float + SampleRange, T: 'a> Iterator for SelectIter<'a, R, F, T> {
+    type Item = (F, &'a T);
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.fitnesses_ids.len(), Some(self.fitnesses_ids.len()))
@@ -300,23 +303,14 @@ impl<'a, R: Rng, T: 'a> Iterator for SelectIter<'a, R, T> {
             let sample = self.distribution_range.ind_sample(&mut self.rng);
             let mut selection = sample * self.total_fitness;
             let index = self.fitnesses_ids.iter().position(|&(_, fit)| {
-                            selection -= fit;
-                            selection <= 0.0
+                            selection = selection - fit;
+                            selection <= F::zero()
                         }).expect("Can't select next index! (float precision?)");
             let (index, fitness) = self.fitnesses_ids.swap_remove(index);
-            self.total_fitness -= fitness;
+            self.total_fitness = self.total_fitness - fitness;
             Some((fitness, &self.roulette_wheel.population[index]))
         }
         else { None }
-    }
-}
-
-impl<T> IntoIterator for RouletteWheel<T> {
-    type Item = (f32, T);
-    type IntoIter = IntoSelectIter<ThreadRng, T>;
-
-    fn into_iter(self) -> IntoSelectIter<ThreadRng, T> {
-        IntoSelectIter::<ThreadRng, _>::new(self)
     }
 }
 
@@ -327,22 +321,31 @@ impl<T> IntoIterator for RouletteWheel<T> {
 ///
 /// [`RouletteWheel`]: struct.RouletteWheel.html
 /// [`IntoIterator`]: https://doc.rust-lang.org/std/iter/trait.IntoIterator.html
-pub struct IntoSelectIter<R: Rng, T> {
-    distribution_range: Range<f32>,
+pub struct IntoSelectIter<R: Rng, F: Float + SampleRange, T> {
+    distribution_range: Range<F>,
     rng: R,
-    total_fitness: f32,
-    fitnesses: Vec<f32>,
+    total_fitness: F,
+    fitnesses: Vec<F>,
     population: Vec<T>
 }
 
-impl<R: Rng, T> IntoSelectIter<R, T> {
-    pub fn new(roulette_wheel: RouletteWheel<T>) -> IntoSelectIter<ThreadRng, T> {
+impl<F: Float + SampleRange, T> IntoIterator for RouletteWheel<F, T> {
+    type Item = (F, T);
+    type IntoIter = IntoSelectIter<ThreadRng, F, T>;
+
+    fn into_iter(self) -> IntoSelectIter<ThreadRng, F, T> {
+        IntoSelectIter::<ThreadRng, _, _>::new(self)
+    }
+}
+
+impl<R: Rng, F: Float + SampleRange, T> IntoSelectIter<R, F, T> {
+    pub fn new(roulette_wheel: RouletteWheel<F, T>) -> IntoSelectIter<ThreadRng, F, T> {
         IntoSelectIter::from_rng(roulette_wheel, thread_rng())
     }
 
-    pub fn from_rng(roulette_wheel: RouletteWheel<T>, rng: R) -> IntoSelectIter<R, T> {
+    pub fn from_rng(roulette_wheel: RouletteWheel<F, T>, rng: R) -> IntoSelectIter<R, F, T> {
         IntoSelectIter {
-            distribution_range: Range::new(0.0, 1.0),
+            distribution_range: Range::new(F::zero(), F::one()),
             rng: rng,
             total_fitness: roulette_wheel.total_fitness,
             fitnesses: roulette_wheel.fitnesses,
@@ -351,8 +354,8 @@ impl<R: Rng, T> IntoSelectIter<R, T> {
     }
 }
 
-impl<R: Rng, T> Iterator for IntoSelectIter<R, T> {
-    type Item = (f32, T);
+impl<R: Rng, F: Float + SampleRange, T> Iterator for IntoSelectIter<R, F, T> {
+    type Item = (F, T);
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.fitnesses.len(), Some(self.fitnesses.len()))
@@ -363,12 +366,12 @@ impl<R: Rng, T> Iterator for IntoSelectIter<R, T> {
             let sample = self.distribution_range.ind_sample(&mut self.rng);
             let mut selection = sample * self.total_fitness;
             let index = self.fitnesses.iter().position(|fit| {
-                            selection -= *fit;
-                            selection <= 0.0
+                            selection = selection - *fit;
+                            selection <= F::zero()
                         }).expect("Can't select next index! (float precision?)");
             let fitness = self.fitnesses.swap_remove(index);
             let individual = self.population.swap_remove(index);
-            self.total_fitness -= fitness;
+            self.total_fitness = self.total_fitness - fitness;
             Some((fitness, individual))
         }
         else { None }
