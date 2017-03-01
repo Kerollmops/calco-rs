@@ -75,12 +75,16 @@ fn main() {
     let mut rng = StdRng::from_seed(&SEED);
     let dist = Range::new(-1000.0, 1000.0);
 
-    let calco: Calco<_, _> = (0..100).into_iter().map(|_| SimpleIndividual {
-                                    x: dist.ind_sample(&mut rng),
-                                    y: dist.ind_sample(&mut rng)
-                                }).collect();
+    let population = (0..100).into_iter()
+                        .map(move |_| SimpleIndividual {
+                            x: dist.ind_sample(&mut rng),
+                            y: dist.ind_sample(&mut rng)
+                        });
 
-    for (gen, best) in calco.enumerate().take(100000).filter(|&(gen, _)| gen % 100 == 0) {
+    let calco = Calco::with_rng(rng, population);
+
+    for (gen, best) in calco.enumerate().take(100000)
+                            .filter(|&(gen, _)| gen % 100 == 0) {
         println!("gen: {:?}, best: {:?}", gen, best);
     }
 }

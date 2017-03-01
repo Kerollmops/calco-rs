@@ -1,9 +1,8 @@
 extern crate rand;
 extern crate roulette_wheel;
 
-use std::iter::FromIterator;
 use rand::{Rng, thread_rng, ThreadRng};
-use roulette_wheel::RouletteWheel;
+use roulette_wheel::{RouletteWheel, IntoSelectIter};
 
 pub mod traits;
 pub mod crossover;
@@ -42,29 +41,49 @@ pub struct Calco<R: Rng, T> {
     population: Vec<T>
 }
 
+impl<R: Rng, T> Calco<R, T> {
+    pub fn new<I: Iterator<Item=T>>(population: I) -> Calco<ThreadRng, T> {
+        Calco {
+            rng: thread_rng(),
+            population: population.collect()
+        }
+    }
+
+    pub fn with_rng<I: Iterator<Item=T>>(rng: R, population: I) -> Calco<R, T> {
+        Calco {
+            rng: rng,
+            population: population.collect()
+        }
+    }
+}
+
+// TODO: remove
 use std::fmt::Debug;
 
-impl<R: Rng + Clone, T: Debug + Clone + Evaluate + Mutate + Reproduce> Iterator for Calco<R, T> {
+impl<R, T> Iterator for Calco<R, T> where R: Rng + Clone, T: Debug + Clone + Evaluate + Mutate + Reproduce {
     type Item = (f32, T);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.population.sort_by(|a, b| b.evaluate().partial_cmp(&a.evaluate()).unwrap());
-        let rw: RouletteWheel<f64, _> = self.population.iter().cloned()
-                                    .map(|ind| (ind.evaluate() as f64, ind))
-                                    .collect();
+        let rw: RouletteWheel<_, _> = self.population.iter().cloned()
+                                            .map(|ind| (ind.evaluate() as f64, ind))
+                                            .collect();
 
-        let new_pop: Vec<_> = rw.into_iter().map(|(fit, ind)| ind).collect();
-        let mut rng = self.rng.clone();
-        let iter = new_pop.chunks(2).flat_map(|parents| {
-                        if parents.len() == 2 {
-                            let children = parents[0].reproduce(&parents[1], &mut rng);
-                            children.into_iter()
-                        }
-                        else { parents.to_vec().into_iter() }
-                    });
+        let new_pop: Vec<_> = IntoSelectIter::with_rng(self.rng.clone(), rw)
+                                .into_iter()
+                                .map(|(_, ind)| ind)
+                                .collect();
+
+        let iter: Vec<_> = new_pop.chunks(2).flat_map(|parents| {
+                                if parents.len() == 2 {
+                                    let children = parents[0].reproduce(&parents[1], &mut self.rng);
+                                    children.into_iter()
+                                }
+                                else { parents.to_vec().into_iter() }
+                            }).take(97).collect();
 
         self.population.truncate(3); // keep bests
-        self.population.extend(iter.take(97));
+        self.population.extend(iter);
 
         if self.rng.gen::<f32>() < 0.2 {
             if let Some(ind) = self.rng.choose_mut(self.population.as_mut_slice()) {
@@ -88,15 +107,6 @@ impl<R: Rng + Clone, T: Debug + Clone + Evaluate + Mutate + Reproduce> Iterator 
                                 }
                             }).expect("Can't find best value");
         Some((fit, best.clone()))
-    }
-}
-
-impl<T: Evaluate + Mutate + Reproduce> FromIterator<T> for Calco<ThreadRng, T> {
-    fn from_iter<I>(iter: I) -> Calco<ThreadRng, T> where I: IntoIterator<Item=T> {
-        Calco {
-            rng: thread_rng(),
-            population: iter.into_iter().collect()
-        }
     }
 }
 

@@ -37,7 +37,7 @@
 extern crate rand;
 extern crate num;
 
-use std::iter::{FromIterator, Iterator, IntoIterator, Sum};
+use std::iter::{Iterator, FromIterator, IntoIterator, Sum};
 use rand::{Rng, ThreadRng, thread_rng};
 use std::cmp::PartialOrd;
 use rand::distributions::{Range, IndependentSample};
@@ -268,7 +268,9 @@ impl<F: Num + Copy, T> RouletteWheel<F, T> {
 /// This struct is created by the [`select_iter`].
 ///
 /// [`iter`]: struct.RouletteWheel.html#method.select_iter
-pub struct SelectIter<'a, R, F, T> where R: Rng, F: 'a + Num + Copy + SampleRange + ToPrimitive + FromPrimitive, T: 'a {
+pub struct SelectIter<'a, R, F, T>
+    where R: Rng, F: 'a + Num + Copy + SampleRange + ToPrimitive + FromPrimitive, T: 'a {
+
     distribution_range: Range<f64>,
     rng: R,
     total_fitness: F,
@@ -276,12 +278,14 @@ pub struct SelectIter<'a, R, F, T> where R: Rng, F: 'a + Num + Copy + SampleRang
     roulette_wheel: &'a RouletteWheel<F, T>
 }
 
-impl<'a, R, F, T> SelectIter<'a, R, F, T> where R: Rng, F: Num + Copy + SampleRange + ToPrimitive + FromPrimitive {
+impl<'a, R, F, T> SelectIter<'a, R, F, T>
+    where R: Rng, F: Num + Copy + SampleRange + ToPrimitive + FromPrimitive {
+
     pub fn new(roulette_wheel: &'a RouletteWheel<F, T>) -> SelectIter<'a, ThreadRng, F, T> {
-        SelectIter::from_rng(roulette_wheel, thread_rng())
+        SelectIter::with_rng(thread_rng(), roulette_wheel)
     }
 
-    pub fn from_rng(roulette_wheel: &'a RouletteWheel<F, T>, rng: R) -> SelectIter<'a, R, F, T> {
+    pub fn with_rng(rng: R, roulette_wheel: &'a RouletteWheel<F, T>) -> SelectIter<'a, R, F, T> {
         SelectIter {
             distribution_range: Range::new(0.0, 1.0),
             rng: rng,
@@ -292,7 +296,9 @@ impl<'a, R, F, T> SelectIter<'a, R, F, T> where R: Rng, F: Num + Copy + SampleRa
     }
 }
 
-impl<'a, R, F, T: 'a> Iterator for SelectIter<'a, R, F, T> where R: Rng, F: Num + Copy + SampleRange + PartialOrd + ToPrimitive + FromPrimitive {
+impl<'a, R, F, T: 'a> Iterator for SelectIter<'a, R, F, T>
+    where R: Rng, F: Num + Copy + SampleRange + PartialOrd + ToPrimitive + FromPrimitive {
+
     type Item = (F, &'a T);
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -333,7 +339,9 @@ pub struct IntoSelectIter<R: Rng, F: Num + Copy + SampleRange, T> {
     population: Vec<T>
 }
 
-impl<F, T> IntoIterator for RouletteWheel<F, T> where F: Num + Copy + SampleRange + PartialOrd + ToPrimitive + FromPrimitive {
+impl<F, T> IntoIterator for RouletteWheel<F, T>
+    where F: Num + Copy + SampleRange + PartialOrd + ToPrimitive + FromPrimitive {
+
     type Item = (F, T);
     type IntoIter = IntoSelectIter<ThreadRng, F, T>;
 
@@ -344,10 +352,10 @@ impl<F, T> IntoIterator for RouletteWheel<F, T> where F: Num + Copy + SampleRang
 
 impl<R: Rng, F: Num + Copy + SampleRange + PartialOrd, T> IntoSelectIter<R, F, T> {
     pub fn new(roulette_wheel: RouletteWheel<F, T>) -> IntoSelectIter<ThreadRng, F, T> {
-        IntoSelectIter::from_rng(roulette_wheel, thread_rng())
+        IntoSelectIter::with_rng(thread_rng(), roulette_wheel)
     }
 
-    pub fn from_rng(roulette_wheel: RouletteWheel<F, T>, rng: R) -> IntoSelectIter<R, F, T> {
+    pub fn with_rng(rng: R, roulette_wheel: RouletteWheel<F, T>) -> IntoSelectIter<R, F, T> {
         IntoSelectIter {
             distribution_range: Range::new(0.0, 1.0),
             rng: rng,
@@ -358,7 +366,9 @@ impl<R: Rng, F: Num + Copy + SampleRange + PartialOrd, T> IntoSelectIter<R, F, T
     }
 }
 
-impl<R, F, T> Iterator for IntoSelectIter<R, F, T> where R: Rng, F: Num + Copy + SampleRange + PartialOrd + ToPrimitive + FromPrimitive {
+impl<R, F, T> Iterator for IntoSelectIter<R, F, T>
+    where R: Rng, F: Num + Copy + SampleRange + PartialOrd + ToPrimitive + FromPrimitive {
+
     type Item = (F, T);
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -402,7 +412,7 @@ mod tests {
         let population = 15..20;
         let rw: RouletteWheel<_> = fitnesses.zip(population).collect();
 
-        let mut iter = SelectIter::from_rng(&rw, rng);
+        let mut iter = SelectIter::with_rng(&rw, rng);
 
         assert_eq!(iter.next(), Some((0.5, &19)));
         assert_eq!(iter.next(), Some((0.3, &17)));
@@ -421,7 +431,7 @@ mod tests {
         let population = 15..20;
         let rw: RouletteWheel<_> = fitnesses.zip(population).collect();
 
-        let mut iter = IntoSelectIter::from_rng(rw, rng);
+        let mut iter = IntoSelectIter::with_rng(rw, rng);
 
         assert_eq!(iter.next(), Some((0.5, 19)));
         assert_eq!(iter.next(), Some((0.3, 17)));
