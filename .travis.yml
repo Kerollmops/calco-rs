@@ -1,4 +1,5 @@
 language: rust
+rust: nightly
 script:
     - cargo test --manifest-path roulette-wheel/Cargo.toml
     - cargo test
