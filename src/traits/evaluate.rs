@@ -1,3 +1,5 @@
-pub trait Evaluate {
-    fn evaluate(&self) -> f32; // TODO: num::Float ?? or EvalType
+use num::Num;
+
+pub trait Evaluate<F: Num> {
+    fn evaluate(&self) -> F;
 }

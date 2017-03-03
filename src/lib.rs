@@ -1,13 +1,21 @@
+#![feature(slice_patterns)]
+
 extern crate rand;
+extern crate num;
 extern crate roulette_wheel;
 
+use std::iter::{IntoIterator, Sum, repeat};
+use std::default::Default;
+use std::cmp::PartialOrd;
+use num::{Num, Zero, ToPrimitive, FromPrimitive};
 use rand::{Rng, thread_rng, ThreadRng};
+use rand::distributions::range::SampleRange;
 use roulette_wheel::{RouletteWheel, IntoSelectIter};
 
 pub mod traits;
 pub mod crossover;
 
-use traits::{Evaluate, Mutate, Reproduce};
+use traits::{Individual, Evaluate, Mutate, Reproduce};
 
 // Termination
 // This generational process is repeated until a termination condition has been reached.
@@ -36,77 +44,96 @@ pub struct StopConditions {
 }
 
 #[derive(Debug)]
-pub struct Calco<R: Rng, T> {
-    rng: R,
-    population: Vec<T>
+pub struct Parameters {
+    pub mutation_rate: f32,
+    pub population_limit: Option<usize>,
+    pub elite_threshold: f32,
+    pub deletion_threshold: f32,
 }
 
-impl<R: Rng, T> Calco<R, T> {
-    pub fn new<I: Iterator<Item=T>>(population: I) -> Calco<ThreadRng, T> {
-        Calco {
-            rng: thread_rng(),
-            population: population.collect()
-        }
+/// Quick and easy who-mates-and-who-dies algorithm with two thresholds.
+/// The diagram below shows two typical threshold values which can be changed.
+///
+/// +-------------------------------------------+  1.0 Best Fitness
+/// | Always a parent; lives another generation |
+/// +-------------------------------------------+ ~0.9 Elite Threshold
+/// |                                           |
+/// | May be a parent; lives another generation |
+/// |                                           |
+/// +-------------------------------------------+ ~0.5 Fitness Deletion Threashold
+/// |                                           |
+/// | Does not survive this generation,         |
+/// | Replaced by new offspring                 |
+/// |                                           |
+/// +-------------------------------------------+  0.0 Worst Fitness
+#[derive(Debug)]
+pub struct Calco<F, T, R> {
+    rng: R,
+    parameters: Parameters,
+    population: Vec<(F, T)>
+}
+
+impl<F: Num + Zero, T: Individual<F>, R: Rng> Calco<F, T, R> {
+    pub fn new<I: IntoIterator<Item=T>>(parameters: Parameters, population: I) -> Calco<F, T, ThreadRng> {
+        Calco::with_rng(thread_rng(), parameters, population)
     }
 
-    pub fn with_rng<I: Iterator<Item=T>>(rng: R, population: I) -> Calco<R, T> {
+    pub fn with_rng<I: IntoIterator<Item=T>>(rng: R, parameters: Parameters, population: I) -> Calco<F, T, R> {
         Calco {
             rng: rng,
-            population: population.collect()
+            parameters: parameters,
+            population: population.into_iter().map(|i| (F::zero(), i)).collect()
         }
     }
 }
 
-// TODO: remove
-use std::fmt::Debug;
+impl<F, T, R> Iterator for Calco<F, T, R>
+    where F: Copy + Num + PartialOrd + SampleRange + Sum + ToPrimitive + FromPrimitive,
+          R: Clone + Rng,
+          T: Clone + Individual<F> {
 
-impl<R, T> Iterator for Calco<R, T> where R: Rng + Clone, T: Debug + Clone + Evaluate + Mutate + Reproduce {
-    type Item = (f32, T);
+    type Item = (F, T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.population.sort_by(|a, b| b.evaluate().partial_cmp(&a.evaluate()).unwrap());
-        let rw: RouletteWheel<_, _> = self.population.iter().cloned()
-                                            .map(|ind| (ind.evaluate() as f64, ind))
-                                            .collect();
+        for &mut (ref mut f, ref i) in self.population.iter_mut() {
+            *f = i.evaluate();
+        }
+        self.population.sort_by(|&(a, _), &(b, _)| b.partial_cmp(&a).unwrap());
 
-        let new_pop: Vec<_> = IntoSelectIter::with_rng(self.rng.clone(), rw)
-                                .into_iter()
-                                .map(|(_, ind)| ind)
-                                .collect();
+        // let rw = self.population.iter()
+        //             // .skip_while(|_| false)
+        //             .take_while(|_| true)
+        //             .cloned().collect();
 
-        let iter: Vec<_> = new_pop.chunks(2).flat_map(|parents| {
-                                if parents.len() == 2 {
-                                    let children = parents[0].reproduce(&parents[1], &mut self.rng);
-                                    children.into_iter()
-                                }
-                                else { parents.to_vec().into_iter() }
-                            }).take(97).collect();
+        {
+            let ((elite, almost_elite), mut loosers) = {
+                let len = self.population.len() as f32;
+                let deletion_index = (self.parameters.deletion_threshold * len) as usize;
+                let elite_index = (self.parameters.elite_threshold * len) as usize;
 
-        self.population.truncate(3); // keep bests
-        self.population.extend(iter);
+                let (maybe_elite, loosers) = self.population.split_at_mut(deletion_index);
+                (maybe_elite.split_at(elite_index - deletion_index), loosers)
+            };
 
-        if self.rng.gen::<f32>() < 0.2 {
-            if let Some(ind) = self.rng.choose_mut(self.population.as_mut_slice()) {
+            // let (fits, new_pop): (Vec<_>, Vec<_>) = IntoSelectIter::with_rng(self.rng.clone(), rw).unzip();
+
+            // let iter = new_pop.chunks(2).zip(repeat(self.rng.clone()))
+            //                 .flat_map(|(parents, rng)| {
+            //                     if let &[ref mother, ref father] = parents {
+            //                         father.reproduce(mother, rng.clone()).into_iter()
+            //                     } else {
+            //                         parents.to_vec().into_iter()
+            //                     }
+            //                 });
+        }
+
+        if self.rng.gen::<f32>() < self.parameters.mutation_rate {
+            if let Some(&mut (_, ref mut ind)) = self.rng.choose_mut(self.population.as_mut_slice()) {
                 ind.mutate(&mut self.rng);
             }
         }
 
-        // TODO: really ugly
-        let (fit, best) = self.population.iter()
-                            .fold(None, |acc, ind| {
-                                match acc {
-                                    Some((bfit, best)) => {
-                                        let fit = ind.evaluate();
-                                        if fit > bfit {
-                                            Some((fit, ind))
-                                        } else {
-                                            Some((bfit, best))
-                                        }
-                                    },
-                                    None => Some((ind.evaluate(), ind)),
-                                }
-                            }).expect("Can't find best value");
-        Some((fit, best.clone()))
+        None
     }
 }
 
