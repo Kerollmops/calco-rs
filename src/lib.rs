@@ -4,18 +4,16 @@ extern crate rand;
 extern crate num;
 extern crate roulette_wheel;
 
-use std::iter::{IntoIterator, Sum, repeat};
-use std::default::Default;
+use std::iter::{IntoIterator, Sum};
 use std::cmp::PartialOrd;
 use num::{Num, Zero, ToPrimitive, FromPrimitive};
 use rand::{Rng, thread_rng, ThreadRng};
 use rand::distributions::range::SampleRange;
-use roulette_wheel::{RouletteWheel, IntoSelectIter};
 
 pub mod traits;
 pub mod crossover;
 
-use traits::{Individual, Evaluate, Mutate, Reproduce};
+use traits::Individual;
 
 // Termination
 // This generational process is repeated until a termination condition has been reached.
@@ -95,36 +93,26 @@ impl<F, T, R> Iterator for Calco<F, T, R>
     type Item = (F, T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        for &mut (ref mut f, ref i) in self.population.iter_mut() {
-            *f = i.evaluate();
-        }
-        self.population.sort_by(|&(a, _), &(b, _)| b.partial_cmp(&a).unwrap());
-
-        // let rw = self.population.iter()
-        //             // .skip_while(|_| false)
-        //             .take_while(|_| true)
-        //             .cloned().collect();
-
+        // TODO: do this elsewhere (specific trait ?)
         {
-            let ((elite, almost_elite), mut loosers) = {
-                let len = self.population.len() as f32;
-                let deletion_index = (self.parameters.deletion_threshold * len) as usize;
-                let elite_index = (self.parameters.elite_threshold * len) as usize;
+            for &mut (ref mut f, ref i) in self.population.iter_mut() {
+                *f = i.evaluate();
+            }
+            self.population.sort_by(|&(a, _), &(b, _)| b.partial_cmp(&a).unwrap());
 
-                let (maybe_elite, loosers) = self.population.split_at_mut(deletion_index);
-                (maybe_elite.split_at(elite_index - deletion_index), loosers)
-            };
+            let len = self.population.len() as f32;
+            let deletion_index = (self.parameters.deletion_threshold * len) as usize;
+            let elite_index = (self.parameters.elite_threshold * len) as usize - deletion_index;
+            let (winners, mut loosers) = self.population.split_at_mut(deletion_index);
 
-            // let (fits, new_pop): (Vec<_>, Vec<_>) = IntoSelectIter::with_rng(self.rng.clone(), rw).unzip();
+            for &mut (ref mut fit, ref mut ind) in loosers.iter_mut() {
+                // TODO: +1, -1 ?
+                let &(_, ref mother) = self.rng.choose(&winners[..elite_index]).expect("Can't choose elite mother!");
+                let &(_, ref father) = self.rng.choose(&winners).expect("Can't choose winner father!");
 
-            // let iter = new_pop.chunks(2).zip(repeat(self.rng.clone()))
-            //                 .flat_map(|(parents, rng)| {
-            //                     if let &[ref mother, ref father] = parents {
-            //                         father.reproduce(mother, rng.clone()).into_iter()
-            //                     } else {
-            //                         parents.to_vec().into_iter()
-            //                     }
-            //                 });
+                *ind = mother.reproduce(&father, self.rng.clone());
+                *fit = F::zero();
+            }
         }
 
         if self.rng.gen::<f32>() < self.parameters.mutation_rate {
@@ -133,7 +121,7 @@ impl<F, T, R> Iterator for Calco<F, T, R>
             }
         }
 
-        None
+        self.population.first().cloned()
     }
 }
 
