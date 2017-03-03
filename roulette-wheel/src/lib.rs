@@ -13,7 +13,7 @@
 //! let population: Vec<_> = (1..10).into_iter().collect();
 //! let fitnesses: Vec<_> = population.iter().map(|ind| evaluate(ind)).collect();
 //!
-//! let rw: RouletteWheel<_> = fitnesses.into_iter().zip(population).collect();
+//! let rw: RouletteWheel<f32, _> = fitnesses.into_iter().zip(population).collect();
 //!
 //! // let's collect the individuals in the order in which the roulette wheel gives them
 //! let individuals: Vec<_> = rw.into_iter().map(|(_, ind)| ind).collect();
@@ -81,7 +81,7 @@ impl<F: Num + Copy, T> RouletteWheel<F, T> {
     /// ```
     /// use roulette_wheel::RouletteWheel;
     ///
-    /// let rw = RouletteWheel::<u8>::new();
+    /// let rw = RouletteWheel::<f32, u8>::new();
     /// ```
     pub fn new() -> RouletteWheel<F, T> {
         RouletteWheel {
@@ -97,7 +97,7 @@ impl<F: Num + Copy, T> RouletteWheel<F, T> {
     /// ```
     /// use roulette_wheel::RouletteWheel;
     ///
-    /// let rw = RouletteWheel::<u8>::with_capacity(15);
+    /// let rw = RouletteWheel::<f32, u8>::with_capacity(15);
     ///
     /// assert_eq!(rw.len(), 0);
     /// ```
@@ -116,7 +116,7 @@ impl<F: Num + Copy, T> RouletteWheel<F, T> {
     /// ```
     /// use roulette_wheel::RouletteWheel;
     ///
-    /// let mut rw = RouletteWheel::<u8>::new();
+    /// let mut rw = RouletteWheel::<f32, u8>::new();
     /// rw.reserve(20);
     ///
     /// assert_eq!(rw.len(), 0);
@@ -132,7 +132,7 @@ impl<F: Num + Copy, T> RouletteWheel<F, T> {
     /// ```
     /// use roulette_wheel::RouletteWheel;
     ///
-    /// let rw: RouletteWheel<_> = [(0.1, 10), (0.2, 15), (0.5, 20)].iter().cloned().collect();
+    /// let rw: RouletteWheel<_, _> = [(0.1, 10), (0.2, 15), (0.5, 20)].iter().cloned().collect();
     ///
     /// assert_eq!(rw.len(), 3);
     /// ```
@@ -146,11 +146,11 @@ impl<F: Num + Copy, T> RouletteWheel<F, T> {
     /// ```
     /// use roulette_wheel::RouletteWheel;
     ///
-    /// let empty_rw = RouletteWheel::<u8>::new();
+    /// let empty_rw = RouletteWheel::<f32, u8>::new();
     ///
     /// assert_eq!(empty_rw.is_empty(), true);
     ///
-    /// let non_empty_rw: RouletteWheel<_> = [(0.1, 10), (0.2, 15), (0.5, 20)].iter().cloned().collect();
+    /// let non_empty_rw: RouletteWheel<_, _> = [(0.1, 10), (0.2, 15), (0.5, 20)].iter().cloned().collect();
     ///
     /// assert_eq!(non_empty_rw.is_empty(), false);
     /// ```
@@ -164,7 +164,7 @@ impl<F: Num + Copy, T> RouletteWheel<F, T> {
     /// ```
     /// use roulette_wheel::RouletteWheel;
     ///
-    /// let mut rw: RouletteWheel<_> = [(0.1, 10), (0.2, 15), (0.5, 20)].iter().cloned().collect();
+    /// let mut rw: RouletteWheel<_, _> = [(0.1, 10), (0.2, 15), (0.5, 20)].iter().cloned().collect();
     ///
     /// assert_eq!(rw.len(), 3);
     ///
@@ -249,7 +249,7 @@ impl<F: Num + Copy, T> RouletteWheel<F, T> {
     /// ``` ignore
     /// use roulette_wheel::RouletteWheel;
     ///
-    /// let rw: RouletteWheel<_> = [(0.1, 10), (0.2, 15), (0.5, 20)].iter().cloned().collect();
+    /// let rw: RouletteWheel<_, _> = [(0.1, 10), (0.2, 15), (0.5, 20)].iter().cloned().collect();
     /// let mut iterator = rw.select_iter();
     ///
     /// assert_eq!(iterator.next(), Some((0.5, &20)));
@@ -410,14 +410,14 @@ mod tests {
         let fitnesses = [0.1, 0.2, 0.3, 0.4, 0.5];
         let fitnesses = fitnesses.iter().cloned();
         let population = 15..20;
-        let rw: RouletteWheel<_> = fitnesses.zip(population).collect();
+        let rw: RouletteWheel<f32, _> = fitnesses.zip(population).collect();
 
-        let mut iter = SelectIter::with_rng(&rw, rng);
+        let mut iter = SelectIter::with_rng(rng, &rw);
 
         assert_eq!(iter.next(), Some((0.5, &19)));
         assert_eq!(iter.next(), Some((0.3, &17)));
-        assert_eq!(iter.next(), Some((0.4, &18)));
         assert_eq!(iter.next(), Some((0.2, &16)));
+        assert_eq!(iter.next(), Some((0.4, &18)));
         assert_eq!(iter.next(), Some((0.1, &15)));
         assert_eq!(iter.next(), None);
     }
@@ -429,21 +429,21 @@ mod tests {
         let fitnesses = [0.1, 0.2, 0.3, 0.4, 0.5];
         let fitnesses = fitnesses.iter().cloned();
         let population = 15..20;
-        let rw: RouletteWheel<_> = fitnesses.zip(population).collect();
+        let rw: RouletteWheel<f32, _> = fitnesses.zip(population).collect();
 
-        let mut iter = IntoSelectIter::with_rng(rw, rng);
+        let mut iter = IntoSelectIter::with_rng(rng, rw);
 
         assert_eq!(iter.next(), Some((0.5, 19)));
         assert_eq!(iter.next(), Some((0.3, 17)));
-        assert_eq!(iter.next(), Some((0.4, 18)));
         assert_eq!(iter.next(), Some((0.2, 16)));
+        assert_eq!(iter.next(), Some((0.4, 18)));
         assert_eq!(iter.next(), Some((0.1, 15)));
         assert_eq!(iter.next(), None);
     }
 
     #[test]
     fn test_len() {
-        let mut rw = RouletteWheel::<u8>::new();
+        let mut rw = RouletteWheel::<f32, u8>::new();
 
         assert_eq!(rw.len(), 0);
 
