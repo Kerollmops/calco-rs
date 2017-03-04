@@ -88,20 +88,17 @@ impl<F: Num + Zero, T: Individual<F>, R: Rng> Calco<F, T, R> {
 }
 
 impl<F, T, R> Iterator for Calco<F, T, R>
-    where F: Copy + Num + PartialOrd + SampleRange + Sum + ToPrimitive + FromPrimitive,
-          R: Clone + Rng,
-          T: Clone + Individual<F> {
+    where F: Send + Copy + Num + PartialOrd + SampleRange + Sum + ToPrimitive + FromPrimitive,
+          R: Send + Clone + Rng,
+          T: Send + Clone + Individual<F> {
 
     type Item = (F, T);
 
     fn next(&mut self) -> Option<Self::Item> {
         // TODO: do this elsewhere (specific trait ?)
         {
-            for &mut (ref mut f, ref i) in self.population.iter_mut() {
-                *f = i.evaluate();
-            }
-            // self.population.par_iter_mut()
-            //                .for_each(|(ref mut f, ref i)| *f = i.evaluate());
+            self.population.par_iter_mut()
+                           .for_each(|&mut (ref mut f, ref i)| *f = i.evaluate());
 
             self.population.sort_by(|&(a, _), &(b, _)| b.partial_cmp(&a).unwrap());
 
