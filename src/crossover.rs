@@ -25,7 +25,7 @@ pub fn two_point_crossover<T: Clone, R: Rng>(rng: &mut R, mother: &[T], father: 
 
     // TODO: use https://doc.rust-lang.org/rand/rand/distributions/range/struct.Range.html
     let first_section = rng.gen_range(0, len);
-    let second_section = rng.gen_range(first_section, len);
+    let second_section = rng.gen_range(first_section, len) - first_section;
 
     let (first_mother_split, second_mother_split, third_mother_split) = {
         let (first, second) = mother.split_at(first_section);

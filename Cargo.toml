@@ -10,4 +10,5 @@ repository = "https://github.com/Kerollmops/calco-rs"
 [dependencies]
 rand = "0.3"
 num = "0.1"
+rayon = "0.6"
 roulette-wheel = { path = "roulette-wheel" }

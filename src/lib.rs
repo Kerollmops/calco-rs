@@ -2,6 +2,7 @@
 
 extern crate rand;
 extern crate num;
+extern crate rayon;
 extern crate roulette_wheel;
 
 use std::iter::{IntoIterator, Sum};
@@ -9,6 +10,7 @@ use std::cmp::PartialOrd;
 use num::{Num, Zero, ToPrimitive, FromPrimitive};
 use rand::{Rng, thread_rng, ThreadRng};
 use rand::distributions::range::SampleRange;
+use rayon::prelude::*;
 
 pub mod traits;
 pub mod crossover;
@@ -98,6 +100,9 @@ impl<F, T, R> Iterator for Calco<F, T, R>
             for &mut (ref mut f, ref i) in self.population.iter_mut() {
                 *f = i.evaluate();
             }
+            // self.population.par_iter_mut()
+            //                .for_each(|(ref mut f, ref i)| *f = i.evaluate());
+
             self.population.sort_by(|&(a, _), &(b, _)| b.partial_cmp(&a).unwrap());
 
             let len = self.population.len() as f32;
