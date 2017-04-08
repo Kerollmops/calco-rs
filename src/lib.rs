@@ -73,11 +73,13 @@ pub struct Calco<F, T, R> {
     population: Vec<(F, T)>
 }
 
-impl<F: Num + Zero, T: Individual<F>, R: Rng> Calco<F, T, R> {
+impl<F: Num + Zero, T: Individual<F>> Calco<F, T, ThreadRng> {
     pub fn new<I: IntoIterator<Item=T>>(parameters: Parameters, population: I) -> Calco<F, T, ThreadRng> {
         Calco::with_rng(thread_rng(), parameters, population)
     }
+}
 
+impl<F: Num + Zero, T: Individual<F>, R: Rng> Calco<F, T, R> {
     pub fn with_rng<I: IntoIterator<Item=T>>(rng: R, parameters: Parameters, population: I) -> Calco<F, T, R> {
         Calco {
             rng: rng,
